@@ -34,7 +34,7 @@ services:
     volumes:
       - ./logs/gluetun:/tmp/gluetun
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "--timeout=5", "--tries=1", "https://1.1.1.1"]
+      test: ["CMD", "wget", "-q", "--spider", "--timeout=5", "--tries=1", "https://9.9.9.9"]
       interval: 60s
       timeout: 10s
       retries: 5
