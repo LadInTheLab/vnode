@@ -142,7 +142,7 @@ cmd_create() {
     local instance_dir="$INSTANCES_DIR/$name"
     mkdir -p "$instance_dir"
 
-    cp -r "$INSTALL_DIR"/{docker-compose.yml,.env.template,.gitignore,scripts} "$instance_dir/"
+    cp -r "$INSTALL_DIR"/{docker-compose.yml,.env.template,scripts} "$instance_dir/"
     chmod +x "$instance_dir"/scripts/*.sh
 
     success "Instance directory created at $instance_dir"
