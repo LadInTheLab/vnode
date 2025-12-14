@@ -9,11 +9,13 @@ set -euo pipefail
 
 # Constants
 VNODE_VERSION="1.0.0"
-INSTALL_DIR="${VNODE_INSTALL_DIR:-/opt/vnode}"
-BIN_DIR="${VNODE_BIN_DIR:-/usr/local/bin}"
-CONFIG_DIR="${VNODE_CONFIG_DIR:-$HOME/.config/vnode}"
-INSTANCES_DIR="${VNODE_INSTANCES_DIR:-$HOME/.local/share/vnode/instances}"
 GITHUB_REPO="${VNODE_REPO:-LadInTheLab/vnode}"
+
+# Paths set by check_root() based on privilege level
+INSTALL_DIR=""
+BIN_DIR=""
+CONFIG_DIR=""
+INSTANCES_DIR=""
 
 # Colors
 RED='\033[0;31m'
