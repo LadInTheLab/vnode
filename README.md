@@ -25,15 +25,15 @@ This creates a self-hosted exit node with intelligent traffic routing:
 │  │                                              (Gluetun)    │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
-│  eth0 (LAN Interface)              tun0 (VPN Tunnel)            │
-│    ↓                                 ↓                          │
-└────┼─────────────────────────────────┼──────────────────────────┘
-     │                                 │
-     ▼                                 ▼
-  Local Network                   VPN Provider
-  (Your Router)                   (WireGuard)
-     │                                 │
-     └────────────→ Internet ←─────────┘
+│  eth0 (LAN Interface)                         tun0 (VPN Tunnel) │
+│    ↓                                                   ↓        │
+└────┼───────────────────────────────────────────────────┼────────┘
+     │                                                   │
+     ▼                                                   ▼
+  Local Network                                    VPN Provider
+  (Your Router)                                     (WireGuard)
+     │                                                   │
+     └───────────────────────→ Internet ←────────────────┘
 ```
 
 ### Traffic Separation
