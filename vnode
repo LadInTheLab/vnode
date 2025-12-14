@@ -347,7 +347,11 @@ cmd_delete() {
     $compose_cmd down -v 2>/dev/null || true
 
     info "Removing instance directory..."
-    rm -rf "$INSTANCES_DIR/$name"
+    # Tailscale state files are owned by root from privileged container
+    if ! rm -rf "$INSTANCES_DIR/$name" 2>/dev/null; then
+        warning "Permission denied - trying with sudo..."
+        sudo rm -rf "$INSTANCES_DIR/$name"
+    fi
 
     success "Instance '$name' deleted"
 }
