@@ -55,6 +55,10 @@ check_root() {
         INSTANCES_DIR="/var/lib/vnode/instances"
     else
         info "Running as user. Installation will be user-local."
+        INSTALL_DIR="${VNODE_INSTALL_DIR:-$HOME/.local/share/vnode}"
+        BIN_DIR="${VNODE_BIN_DIR:-$HOME/.local/bin}"
+        CONFIG_DIR="${VNODE_CONFIG_DIR:-$HOME/.config/vnode}"
+        INSTANCES_DIR="${VNODE_INSTANCES_DIR:-$HOME/.local/share/vnode/instances}"
     fi
 }
 
@@ -251,7 +255,7 @@ download_vnode() {
             local temp_dir=$(mktemp -d)
             cd "$temp_dir"
             curl -fsSL "https://github.com/$GITHUB_REPO/archive/refs/heads/main.tar.gz" | tar xz
-            cp -r vnode-deploy-main/* "$INSTALL_DIR/"
+            cp -r vnode-main/* "$INSTALL_DIR/"
             cd /
             rm -rf "$temp_dir"
         else
@@ -344,11 +348,20 @@ show_completion() {
     echo -e "  Advanced:      ${INSTALL_DIR}/ADVANCED.md"
     echo ""
 
-    if [ "$EUID" -ne 0 ] && ! groups | grep -q docker; then
-        warning "Your user is not in the docker group"
-        echo "  Run: sudo usermod -aG docker \$USER"
-        echo "  Then log out and back in"
-        echo ""
+    if [ "$EUID" -ne 0 ]; then
+        if ! groups | grep -q docker; then
+            warning "Your user is not in the docker group"
+            echo "  Run: sudo usermod -aG docker \$USER"
+            echo "  Then log out and back in"
+            echo ""
+        fi
+
+        if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+            warning "~/.local/bin is not in your PATH"
+            echo "  Add this to your ~/.bashrc or ~/.zshrc:"
+            echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+            echo ""
+        fi
     fi
 }
 
