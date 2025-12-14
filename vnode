@@ -82,6 +82,7 @@ ${CYAN}CONFIGURATION:${NC}
 ${CYAN}SYSTEM:${NC}
   ${GREEN}doctor${NC}                     Check system dependencies
   ${GREEN}version${NC}                    Show vnode version
+  ${GREEN}uninstall${NC}                  Uninstall vNode
   ${GREEN}help${NC}                       Show this help
 
 ${CYAN}EXAMPLES:${NC}
@@ -881,6 +882,111 @@ cmd_doctor() {
     fi
 }
 
+# Uninstall vNode
+cmd_uninstall() {
+    echo ""
+    warning "This will remove vNode software and configuration"
+    echo ""
+    echo "The following will be removed:"
+    echo "  • vNode CLI: $(which vnode 2>/dev/null || echo 'unknown')"
+    echo "  • vNode installation: $INSTALL_DIR"
+    echo "  • vNode configuration: $CONFIG_DIR"
+    echo ""
+
+    # Check if any instances exist
+    local instances=($(get_instances))
+    local instance_count=${#instances[@]}
+
+    if [ $instance_count -gt 0 ]; then
+        warning "Found $instance_count instance(s):"
+        for instance in "${instances[@]}"; do
+            echo "  • $instance"
+        done
+        echo ""
+        echo "Instance data will NOT be removed automatically for safety."
+        echo ""
+    fi
+
+    read -p "Type 'uninstall' to confirm: " -r
+    echo
+
+    if [[ $REPLY != "uninstall" ]]; then
+        info "Uninstall cancelled"
+        return
+    fi
+
+    info "Uninstalling vNode..."
+
+    # Handle instances first if they exist
+    if [ $instance_count -gt 0 ]; then
+        echo ""
+        warning "Instance data still exists at $INSTANCES_DIR"
+        echo ""
+        echo "To remove instances manually:"
+        echo "  1. Stop: cd $INSTANCES_DIR/<name> && docker-compose down -v"
+        echo "  2. Delete: rm -rf $INSTANCES_DIR/<name>"
+        echo ""
+        read -p "Remove ALL instance data now? (type 'yes' to confirm) " -r
+        echo
+
+        if [[ $REPLY == "yes" ]]; then
+            # Stop and remove containers for each instance
+            for instance in "${instances[@]}"; do
+                local instance_dir="$INSTANCES_DIR/$instance"
+
+                if [ -f "$instance_dir/docker-compose.yml" ]; then
+                    info "Stopping instance: $instance"
+                    cd "$instance_dir"
+
+                    local compose_cmd=$(get_compose_cmd)
+                    if $compose_cmd down -v 2>/dev/null; then
+                        success "Stopped containers for $instance"
+                    else
+                        warning "Could not stop containers for $instance (may not be running)"
+                    fi
+                else
+                    warning "Skipping $instance (not a valid vNode instance)"
+                fi
+            done
+
+            # Remove instance directories (may need sudo for root-owned files)
+            info "Removing instance data..."
+            if ! rm -rf "$INSTANCES_DIR" 2>/dev/null; then
+                warning "Permission denied - trying with sudo..."
+                sudo rm -rf "$INSTANCES_DIR"
+            fi
+            success "Removed all instance data"
+        else
+            info "Keeping instance data at $INSTANCES_DIR"
+            echo "You can manually remove it later if needed"
+        fi
+    fi
+
+    # Remove CLI
+    local vnode_path=$(which vnode 2>/dev/null)
+    if [ -n "$vnode_path" ] && [ -f "$vnode_path" ]; then
+        rm -f "$vnode_path"
+        success "Removed CLI from $vnode_path"
+    fi
+
+    # Remove installation directory
+    if [ -d "$INSTALL_DIR" ]; then
+        rm -rf "$INSTALL_DIR"
+        success "Removed installation from $INSTALL_DIR"
+    fi
+
+    # Remove config directory
+    if [ -d "$CONFIG_DIR" ]; then
+        rm -rf "$CONFIG_DIR"
+        success "Removed configuration from $CONFIG_DIR"
+    fi
+
+    echo ""
+    success "vNode uninstalled"
+    echo ""
+    echo "Note: Docker, Docker Compose, and system dependencies were NOT removed"
+}
+
 # Main command router
 main() {
     local cmd="${1:-help}"
@@ -906,6 +1012,7 @@ main() {
         info) cmd_info "$@" ;;
         version|-v|--version) cmd_version "$@" ;;
         doctor) cmd_doctor "$@" ;;
+        uninstall) cmd_uninstall "$@" ;;
         help|-h|--help) show_help "$@" ;;
         *)
             error "Unknown command: $cmd"
