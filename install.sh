@@ -257,13 +257,16 @@ download_vnode() {
             local temp_dir=$(mktemp -d)
             cd "$temp_dir"
             curl -fsSL "https://github.com/$GITHUB_REPO/archive/refs/heads/main.tar.gz" | tar xz
-            cp -r vnode-main/* "$INSTALL_DIR/"
+            # Copy all files including hidden ones
+            cp -r vnode-main/* "$INSTALL_DIR/" 2>/dev/null || true
+            cp -r vnode-main/.* "$INSTALL_DIR/" 2>/dev/null || true
             cd /
             rm -rf "$temp_dir"
         else
             # Fallback: assume we're running from the repo
             local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-            cp -r "$script_dir"/* "$INSTALL_DIR/"
+            cp -r "$script_dir"/* "$INSTALL_DIR/" 2>/dev/null || true
+            cp -r "$script_dir"/.* "$INSTALL_DIR/" 2>/dev/null || true
         fi
     fi
 
