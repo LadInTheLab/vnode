@@ -1,0 +1,7 @@
+[Unit]
+Description=vNode Multi-Instance Target
+After=docker.service
+Requires=docker.service
+
+[Install]
+WantedBy=multi-user.target

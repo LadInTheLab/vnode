@@ -1,0 +1,28 @@
+[Unit]
+Description=vNode Instance (%i)
+After=docker.service
+Requires=docker.service
+PartOf=vnode.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Set working directory to instance
+WorkingDirectory=%h/.local/share/vnode/instances/%i
+
+# Start containers
+ExecStart=/usr/bin/docker-compose up -d
+
+# Stop containers
+ExecStop=/usr/bin/docker-compose stop
+
+# Reload configuration
+ExecReload=/usr/bin/docker-compose restart
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=vnode.target

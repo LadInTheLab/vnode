@@ -1,0 +1,28 @@
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# Claude Code local settings
+.claude/
+
+# Tailscale state
+tailscale-state/
+
+# Logs
+logs/
+*.log
+
+# Monitoring data
+monitoring/
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~

@@ -1,0 +1,149 @@
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun-vnode
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      pub_net:
+        ipv4_address: ${MACVLAN_IP}
+    # Static MAC prevents UDM Pro ARP confusion
+    mac_address: ${MACVLAN_MAC}
+    sysctls:
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.conf.default.rp_filter=0
+      - net.ipv4.ip_forward=1
+    environment:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${VPN_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${VPN_IP}
+      - WIREGUARD_PUBLIC_KEY=${VPN_PUBLIC_KEY}
+      - WIREGUARD_ENDPOINT_IP=${VPN_ENDPOINT_IP}
+      - WIREGUARD_ENDPOINT_PORT=${VPN_PORT}
+      - WIREGUARD_ALLOWED_IPS=0.0.0.0/0
+      - WIREGUARD_PERSISTENT_KEEPALIVE=${WIREGUARD_KEEPALIVE:-25}
+      - DNS_KEEP_NAMESERVER=off
+      - DNS_ADDRESS=${DNS_SERVER:-9.9.9.9}
+      - WIREGUARD_MTU=${WIREGUARD_MTU:-1280}
+      - HTTPPROXY=off
+      - SHADOWSOCKS=off
+      - FIREWALL_OUTBOUND_SUBNETS=100.64.0.0/10,${GATEWAY_IP}/32
+    volumes:
+      - ./logs/gluetun:/tmp/gluetun
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "--timeout=3", "--tries=1", "https://api.ipify.org"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-vnode
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    privileged: true
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_HOSTNAME=${TS_HOSTNAME:-vnode}
+      - TS_USERSPACE=false
+      - TS_EXTRA_ARGS=--reset --advertise-exit-node --accept-routes --advertise-connector
+      - TS_STATE_DIR=/var/lib/tailscale
+      - PORT=${TUNNEL_PORT:-41641}
+      - GATEWAY_IP=${GATEWAY_IP}
+      - TCP_MSS_CLAMP=${TCP_MSS_CLAMP:-1120}
+    volumes:
+      - ./tailscale-state:/var/lib/tailscale
+      - ./logs/tailscale:/var/log/tailscale
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "--- STARTING OPTIMIZED EXIT NODE SCRIPT (ROUTING FIXED) ---"
+        
+        # 1. Force IP Forwarding
+        echo '1' > /proc/sys/net/ipv4/ip_forward
+        echo '1' > /proc/sys/net/ipv6/conf/all/forwarding
+        
+        # 2. DNS - Force Cloudflare
+        umount /etc/resolv.conf 2>/dev/null || true
+        echo "nameserver 9.9.9.9" > /etc/resolv.conf
+        
+
+        # 2B. End "Stranger Danger" Rule
+        # We loop through EVERY interface (eth0, tun0, tailscale0) and set rp_filter to 0.
+        for i in /proc/sys/net/ipv4/conf/*/rp_filter; do
+          echo 0 > "$$i"
+        done
+        echo "Reverse Path Filtering disabled."
+
+        # 3. Wait for VPN Tunnel (gluetun)
+        echo "Waiting for tun0..."
+        until ip link show tun0 >/dev/null 2>&1; do sleep 1; done
+        
+        # 4. Create "Direct" Routing Table (Table 51)
+        # This table will be used ONLY for Tailscale's encrypted control traffic
+        ip route flush table 51 2>/dev/null || true
+        ip route add default via $${GATEWAY_IP} dev eth0 table 51
+        
+        # 5. The "Switcheroo" - Fix Main Routing Table [CRITICAL FIX]
+        # We delete the default route via eth0 and replace it with tun0.
+        # This forces ALL standard traffic (including Tailscale clients) to use the VPN.
+        echo "Inverting routing tables..."
+        ip route del default table main 2>/dev/null || true
+        ip route add default dev tun0 table main
+        
+        # 6. Routing Rules (Policy Based Routing)
+        # Send marked traffic (Tailscale control) to Table 51 (Direct Internet)
+        ip rule del fwmark 0x40000 2>/dev/null || true
+        ip rule add fwmark 0x40000 lookup 51 prio 1
+        
+        # 7. Mark Tailscale Control Traffic (UDP 41642 + STUN)
+        # This marking triggers the rule above, bypassing the VPN.
+        iptables -t mangle -I OUTPUT 1 -p udp --dport 3478 -j MARK --set-mark 0x40000
+        iptables -t mangle -I OUTPUT 1 -p udp --sport 3478 -j MARK --set-mark 0x40000
+        iptables -t mangle -I OUTPUT 1 -p udp --sport $${PORT} -j MARK --set-mark 0x40000
+        iptables -t mangle -I OUTPUT 1 -p udp --dport $${PORT} -j MARK --set-mark 0x40000
+
+        # 8. NAT & Forwarding
+        echo "Applying IPTables Rules..."
+        iptables -P FORWARD ACCEPT
+        # Masquerade VPN traffic (Client -> Internet)
+        iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE
+        # Masquerade Direct traffic (Control -> Internet)
+        iptables -t nat -A POSTROUTING -o eth0 -m mark --mark 0x40000 -j MASQUERADE
+
+        # 9. MSS Clamping (Fixes the Packet Size/Netstack Error)
+        # We clamp to 1120 to be safe (WireGuard overhead)
+        iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss $${TCP_MSS_CLAMP}
+        
+
+        # 10. The "Missing Return Map" Fix (Background Injection)
+        # We spawn a background shell to wait for tailscale0 to appear, then inject the rule.
+        (
+          echo "Background: Waiting for tailscale0 to initialize..."
+          until ip link show tailscale0 >/dev/null 2>&1; do sleep 1; done
+          
+          # Sleep a few extra seconds to let Tailscale populate Table 52
+          sleep 5
+          
+          echo "Background: Injecting Return Route Fix (Priority 99)..."
+          ip rule add to 100.64.0.0/10 lookup 52 priority 99
+          echo "Background: Fix applied. Return traffic map is active."
+        ) &
+
+
+        echo "Booting Tailscale..."
+        /usr/local/bin/containerboot
+    restart: unless-stopped
+
+networks:
+  pub_net:
+    name: ${MACVLAN_NETWORK:-pub_net}
+    external: true
