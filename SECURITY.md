@@ -82,6 +82,8 @@ A vNode communicates with exactly five types of endpoints:
 
 ## Security Considerations
 
+Note - these security considerations are not unique to vNodes - they are inherent to typical use of Docker and MACVLAN, but I feel compelled to point them out in the interest of transparency. 
+
 **Container Isolation**: Docker provides process isolation but shares the kernel. A container escape would compromise the host.
 
 **Privileged Containers**: Both containers run privileged for network stack access. This is required but reduces security boundaries.
