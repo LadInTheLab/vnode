@@ -316,6 +316,13 @@ EOF
 check_existing() {
     if [ -d "$INSTALL_DIR" ] && [ -f "$BIN_DIR/vnode" ]; then
         warning "vNode is already installed"
+
+        # If running non-interactively (piped to bash), auto-upgrade
+        if [ ! -t 0 ]; then
+            info "Running in non-interactive mode - upgrading automatically"
+            return 0
+        fi
+
         echo ""
         read -p "Reinstall/upgrade? (y/N) " -n 1 -r
         echo
