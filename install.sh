@@ -379,23 +379,110 @@ show_completion() {
 
 # Uninstall function
 uninstall() {
-    warning "This will remove vNode and all instances"
-    read -p "Are you sure? (type 'yes' to confirm) " -r
-    echo
-    if [[ $REPLY == "yes" ]]; then
-        info "Uninstalling vNode..."
-        rm -f "$BIN_DIR/vnode"
-        rm -rf "$INSTALL_DIR"
-        rm -rf "$CONFIG_DIR"
-        read -p "Remove all instance data at $INSTANCES_DIR? (y/N) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf "$INSTANCES_DIR"
-        fi
-        success "vNode uninstalled"
-    else
-        info "Uninstall cancelled"
+    check_root  # Set paths based on privilege level
+
+    echo ""
+    warning "This will remove vNode software and configuration"
+    echo ""
+    echo "The following will be removed:"
+    echo "  • vNode CLI: $BIN_DIR/vnode"
+    echo "  • vNode installation: $INSTALL_DIR"
+    echo "  • vNode configuration: $CONFIG_DIR"
+    echo ""
+
+    # Check if any instances exist
+    local instance_count=0
+    if [ -d "$INSTANCES_DIR" ]; then
+        instance_count=$(find "$INSTANCES_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
     fi
+
+    if [ "$instance_count" -gt 0 ]; then
+        warning "Found $instance_count instance(s) in $INSTANCES_DIR"
+        echo "Instance data will NOT be removed automatically for safety."
+        echo ""
+    fi
+
+    read -p "Type 'uninstall' to confirm: " -r
+    echo
+
+    if [[ $REPLY != "uninstall" ]]; then
+        info "Uninstall cancelled"
+        return
+    fi
+
+    info "Uninstalling vNode..."
+
+    # Remove CLI (safe - single file)
+    if [ -f "$BIN_DIR/vnode" ]; then
+        rm -f "$BIN_DIR/vnode"
+        success "Removed CLI from $BIN_DIR/vnode"
+    fi
+
+    # Remove installation directory (safe - only contains vNode files)
+    if [ -d "$INSTALL_DIR" ]; then
+        rm -rf "$INSTALL_DIR"
+        success "Removed installation from $INSTALL_DIR"
+    fi
+
+    # Remove config directory (safe - only contains vNode config)
+    if [ -d "$CONFIG_DIR" ]; then
+        rm -rf "$CONFIG_DIR"
+        success "Removed configuration from $CONFIG_DIR"
+    fi
+
+    # Handle instances separately with extra confirmation
+    if [ "$instance_count" -gt 0 ]; then
+        echo ""
+        warning "Instance data still exists at $INSTANCES_DIR"
+        echo ""
+        echo "To remove instances:"
+        echo "  1. Stop all instances: vnode stop all (if you haven't uninstalled CLI yet)"
+        echo "  2. Or manually: cd $INSTANCES_DIR/<name> && docker-compose down -v"
+        echo "  3. Then delete: rm -rf $INSTANCES_DIR/<name>"
+        echo ""
+        read -p "Remove ALL instance data now? (type 'yes' to confirm) " -r
+        echo
+
+        if [[ $REPLY == "yes" ]]; then
+            # Stop and remove containers for each instance
+            while IFS= read -r instance_dir; do
+                local instance_name=$(basename "$instance_dir")
+
+                # Only process directories that have our docker-compose.yml
+                # This ensures we only touch vNode-created containers
+                if [ -f "$instance_dir/docker-compose.yml" ]; then
+                    info "Stopping instance: $instance_name"
+                    cd "$instance_dir"
+
+                    # docker-compose down only removes containers defined in THIS compose file
+                    # It will never touch user's other containers, even with same name
+                    if docker-compose down -v 2>/dev/null || docker compose down -v 2>/dev/null; then
+                        success "Stopped containers for $instance_name"
+                    else
+                        warning "Could not stop containers for $instance_name (may not be running)"
+                    fi
+                else
+                    warning "Skipping $instance_name (not a valid vNode instance)"
+                fi
+            done < <(find "$INSTANCES_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+
+            # Remove instance directories (may need sudo for root-owned files from privileged containers)
+            info "Removing instance data..."
+            if ! rm -rf "$INSTANCES_DIR" 2>/dev/null; then
+                warning "Permission denied - trying with sudo..."
+                sudo rm -rf "$INSTANCES_DIR"
+            fi
+            success "Removed all instance data"
+        else
+            info "Keeping instance data at $INSTANCES_DIR"
+            echo "You can manually remove it later if needed"
+        fi
+    fi
+
+    echo ""
+    success "vNode uninstalled"
+    echo ""
+    echo "Note: Docker, Docker Compose, and system dependencies were NOT removed"
 }
 
 # Main installation flow
