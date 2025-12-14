@@ -277,27 +277,23 @@ download_vnode() {
 install_cli() {
     info "Installing vNode CLI..."
 
-    # Ensure bin directory exists
-    mkdir -p "$BIN_DIR"
-
-    # Copy CLI to bin directory
-    if [ -f "$INSTALL_DIR/vnode" ]; then
-        if [ "$EUID" -eq 0 ]; then
-            cp "$INSTALL_DIR/vnode" "$BIN_DIR/vnode"
-            chmod +x "$BIN_DIR/vnode"
-        else
-            if [ -w "$BIN_DIR" ] || mkdir -p "$BIN_DIR" 2>/dev/null; then
-                cp "$INSTALL_DIR/vnode" "$BIN_DIR/vnode"
-                chmod +x "$BIN_DIR/vnode"
-            else
-                sudo cp "$INSTALL_DIR/vnode" "$BIN_DIR/vnode"
-                sudo chmod +x "$BIN_DIR/vnode"
-            fi
-        fi
-        success "vNode CLI installed to $BIN_DIR/vnode"
-    else
+    if [ ! -f "$INSTALL_DIR/vnode" ]; then
         warning "CLI not found, skipping"
+        return
     fi
+
+    # Ensure bin directory exists
+    if [ "$EUID" -eq 0 ]; then
+        mkdir -p "$BIN_DIR"
+        cp "$INSTALL_DIR/vnode" "$BIN_DIR/vnode"
+        chmod +x "$BIN_DIR/vnode"
+    else
+        mkdir -p "$BIN_DIR"
+        cp "$INSTALL_DIR/vnode" "$BIN_DIR/vnode"
+        chmod +x "$BIN_DIR/vnode"
+    fi
+
+    success "vNode CLI installed to $BIN_DIR/vnode"
 }
 
 # Create config
