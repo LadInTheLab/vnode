@@ -68,6 +68,24 @@ This separation means:
 
 ## Quick Start
 
+### Before You Start
+For devices acting as a host for a VPN forwarding device (like a vNode), it's reccomended you run the following command(s): 
+
+```bash
+sudo ethtool -K eth0 rx-udp-gro-forwarding on rx-gro-list off
+```
+or to make the change survive reboots:
+
+```bash
+sudo crontab -e
+```
+Select 1 (the default, just press enter), and add the following line to the bottom of the file: 
+```bash
+@reboot /sbin/ethtool -K eth0 rx-udp-gro-forwarding on rx-gro-list off
+```
+
+This configures GRO (generic recieive offload) for a "forwarding" task like hosting an exit node by keeping "clusters" of packets together, reducing CPU overhead. 
+
 ### Installation
 
 ```bash
