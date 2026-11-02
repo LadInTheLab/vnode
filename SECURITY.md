@@ -94,7 +94,7 @@ Note - these security considerations are not unique to vNodes - they are inheren
 
 ## Not Suitable For
 
-**Anonymity**: If you need true anonymity, use Tor or ideally Nym. VPNs (including vNodes) require trusting a provider and do not provide anonymity guarantees.
+**Anonymity**: If you need true anonymity, use Nym. VPNs (including vNodes) require trusting a provider and do not provide anonymity guarantees.
 
 **Untrusted Hardware**: Do not deploy vNodes on VPS providers or any hardware you don't control. The vNode has access to unencrypted traffic during tunnel switching.
 
