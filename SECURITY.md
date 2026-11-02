@@ -24,7 +24,7 @@
 **VPNs Are Not Anonymity Tools**:
 - You must trust your VPN provider with your traffic
 - VPN provider can see destination IPs and traffic patterns
-- For anonymity, use Tor or Nym (not a VPN)
+- For anonymity, use Nym (not a VPN)
 
 **Trust Your vNode Host**:
 - Traffic switches from Tailscale tunnel to VPN tunnel on the vNode
